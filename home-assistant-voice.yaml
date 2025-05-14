@@ -8,6 +8,8 @@ substitutions:
   voice_assist_listening_for_command_phase_id: '3'
   # The voice assistant is currently processing the command
   voice_assist_thinking_phase_id: '4'
+  # The voice assistant is preparing to speak (green animation)
+  voice_assist_preparing_to_speak_phase_id: '6'
   # The voice assistant is replying to the command
   voice_assist_replying_phase_id: '5'
   # The voice assistant is not ready
@@ -545,6 +547,23 @@ light:
         to: 6
     effects:
       - addressable_lambda:
+          name: "Preparing To Speak"
+          update_interval: 200ms
+          lambda: |-
+            static uint8_t index = 0;
+            Color color(0, 255, 0);  
+            if (initial_run) {
+              index = 0;
+            }
+            for (int i = 0; i < 12; i++) {
+              if (i <= index ) {
+                it[i] = color;
+              } else {
+                it[i] = Color::BLACK;
+              }
+            }
+            index = (index + 1) % 12;
+      - addressable_lambda:
           name: "Waiting for Command"
           update_interval: 100ms
           lambda: |-
@@ -992,6 +1011,8 @@ script:
             id(control_leds_voice_assistant_listening_for_command_phase).execute();
           } else if (id(voice_assistant_phase) == ${voice_assist_thinking_phase_id}) {
             id(control_leds_voice_assistant_thinking_phase).execute();
+          } else if (id(voice_assistant_phase) == ${voice_assist_preparing_to_speak_phase_id}) {
+            id(control_leds_voice_assistant_preparing_to_speak_phase).execute();
           } else if (id(voice_assistant_phase) == ${voice_assist_replying_phase_id}) {
             id(control_leds_voice_assistant_replying_phase).execute();
           } else if (id(voice_assistant_phase) == ${voice_assist_error_phase_id}) {
@@ -1093,6 +1114,15 @@ script:
           brightness: !lambda return max( id(led_ring).current_values.get_brightness() , 0.2f );
           id: voice_assistant_leds
           effect: "Thinking"
+
+  # Script executed when the voice assistant is preparing to speak
+  # Green light filling the LED ring
+  - id: control_leds_voice_assistant_preparing_to_speak_phase
+    then:
+      - light.turn_on:
+          brightness: !lambda return max( id(led_ring).current_values.get_brightness() , 0.2f );
+          id: voice_assistant_leds
+          effect: "Preparing To Speak"
 
   # Script executed when the voice assistant is thinking to a command
   # Fast anticlockwise spin of the LED ring.
@@ -1415,7 +1445,7 @@ speaker:
     dac_type: external
     channel: stereo
     timeout: never
-    buffer_duration: 100ms
+    buffer_duration: 500ms
     audio_dac: aic3204_dac
 
   # Virtual speakers to combine the announcement and media streams together into one output
@@ -1654,6 +1684,7 @@ voice_assistant:
     - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
     - script.execute: control_leds
   on_tts_start:
+    # Set directly to replying phase (skip preparing to speak phase)
     - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
     - script.execute: control_leds
     # Start a script that would potentially enable the stop word if the response is longer than a second
